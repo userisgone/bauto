@@ -1,25 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Bioinformatics Tools</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; }
-    h1 { color: #0077aa; }
-    ul { line-height: 1.8; }
-    a { color: #0077aa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bioinformatics Tools</title>
+  <link rel="stylesheet" href="styles/site.css" />
 </head>
 <body>
-  <h1>My Bioinformatics Tools</h1>
-  <p>Welcome! Here are some simple tools I’ve built:</p>
-  <ul>
-    <li><a href="tools/orf-finder.html">ORF Finder</a></li>
-    <li><a href="tools/revcomp.html">Reverse Complement</a></li>
-    <li><a href="tools/gc.html">GC Content Calculator</a></li>
-  </ul>
-  <footer style="margin-top:2rem;">&copy; 2025 My Name</footer>
+  <div class="container">
+    <header class="header">
+      <div class="brand">Bioinformatics Tools</div>
+      <nav>
+        <a href="./">Home</a> ·
+        <a href="https://github.com/yourusername/yourrepo">GitHub</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h1>Fast, private, browser‑based tools</h1>
+      <p class="muted">Paste sequences, run analyses locally—no uploads.</p>
+    </section>
+
+    <section class="mt-4">
+      <div class="grid">
+        <article class="card col-4">
+          <h3>ORF Finder</h3>
+          <p class="muted">Scan 6 frames, custom start/stop, export results.</p>
+          <a class="btn mt-2" href="tools/orf-finder.html">Open</a>
+        </article>
+
+        <article class="card col-4">
+          <h3>Reverse Complement</h3>
+          <p class="muted">Instant reverse‑complement for DNA sequences.</p>
+          <a class="btn mt-2" href="tools/revcomp.html">Open</a>
+        </article>
+
+        <article class="card col-4">
+          <h3>GC Content</h3>
+          <p class="muted">Overall & sliding‑window GC with downloads.</p>
+          <a class="btn mt-2" href="tools/gc.html">Open</a>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer">
+      © 2025 Emma Barton · All processing happens in your browser.
+    </footer>
+  </div>
 </body>
 </html>
+
