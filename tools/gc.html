@@ -280,7 +280,7 @@ ATGCGTGCTTAGCGGCT..."></textarea>
         const y = yScale(gy);
         ctx.fillText(String(gy), 12, y + 4);
       }
-      ctx.fillText('GC% (0–100)', 6, pad.top + 12);
+      ctx.fillText('GC% (0–100)', 8, pad.top + 12);
 
       // X ticks: choose a nice step for ~6–10 ticks
       const targetTicks = Math.max(6, Math.min(10, Math.floor(plotW / 90)));
