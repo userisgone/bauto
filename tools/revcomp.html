@@ -3,24 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reverse Complement Tool</title>
+  <title>Reverse Complement</title>
+  <link rel="stylesheet" href="../styles/site.css">
 </head>
 <body>
-  <h1>Reverse Complement</h1>
-  <textarea id="seq" rows="8" cols="60" placeholder="Paste DNA sequence here..."></textarea><br><br>
-  <button onclick="runRC()">Get Reverse Complement</button>
-  <pre id="output"></pre>
+  <div class="container">
+    <h1>Reverse Complement</h1>
+    <p class="muted">Paste DNA below, then click run.</p>
+
+    <label class="mb-2">Input sequence</label>
+    <textarea id="seq" class="textarea" placeholder=">seq1
+ATGC..." ></textarea>
+
+    <button class="btn mt-3" id="run">Run</button>
+
+    <label class="mt-4 mb-2">Output</label>
+    <pre id="out" class="card" style="white-space: pre-wrap;"></pre>
+  </div>
 
   <script>
-    function reverseComplement(seq) {
-      const comp = { A:"T", T:"A", G:"C", C:"G", a:"t", t:"a", g:"c", c:"g" };
-      return seq.split("").reverse().map(b => comp[b] || b).join("");
+    function reverseComplement(seq){
+      const map = {A:'T',T:'A',C:'G',G:'C',a:'t',t:'a',c:'g',g:'c'};
+      return seq.split('').reverse().map(b => map[b] ?? b).join('');
     }
-    function runRC() {
+    document.getElementById('run').addEventListener('click', () => {
       const input = document.getElementById('seq').value;
-      const result = reverseComplement(input);
-      document.getElementById('output').innerText = result;
-    }
+      document.getElementById('out').textContent = reverseComplement(input);
+    });
   </script>
 </body>
 </html>
