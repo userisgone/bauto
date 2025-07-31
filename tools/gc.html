@@ -2,21 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>GC Content with Sliding Window (Python via Pyodide)</title>
+  <title>GC Content + Reverse Complement (Python)</title>
   <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 1rem; max-width: 800px; margin: auto; }
-    textarea { width: 100%; height: 120px; font-family: monospace; }
-    canvas { width: 100%; height: 300px; border: 1px solid #ccc; }
-    .controls { margin: 1rem 0; }
-    input[type=number] { width: 80px; }
-    #tooltip {
-      position: absolute;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 8px;
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f8f9fa;
+      padding: 2rem;
+      margin: 0;
+      color: #212529;
+    }
+    .tool-card {
+      background: white;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 1.5rem;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      font-family: monospace;
+      font-size: 1rem;
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+    }
+    input, button, select {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+    }
+    canvas {
+      width: 100%;
+      height: 300px;
+      display: block;
+      margin-top: 1rem;
       border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    pre {
+      background: #f1f1f1;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    .tooltip {
+      position: absolute;
+      background: #333;
+      color: white;
+      padding: 6px 10px;
       border-radius: 4px;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       pointer-events: none;
       display: none;
     }
@@ -24,121 +64,157 @@
 </head>
 <body>
 
-<h1>GC Content with Sliding Window (Python)</h1>
-
-<label for="seq">Paste FASTA/sequence:</label>
-<textarea id="seq">>Example
-ATGCGCGTAGCTAGCGCGCGCGCTAGCTAGCTAGCGCGC</textarea>
-
-<div class="controls">
-  <label>Window size: <input type="number" id="win" value="10"></label>
-  <label>Step size: <input type="number" id="step" value="5"></label>
-  <button id="runBtn">Analyze</button>
+<!-- REVERSE COMPLEMENT TOOL -->
+<div class="tool-card">
+  <h2>Reverse Complement (Python)</h2>
+  <textarea id="rev-seq">ATGCGTACCTGA</textarea><br>
+  <button id="rev-run">Get Reverse Complement</button>
+  <h4>Output:</h4>
+  <pre id="rev-output">Click the button to run</pre>
 </div>
 
-<canvas id="plot"></canvas>
-<div id="tooltip"></div>
+<!-- GC SLIDING WINDOW TOOL -->
+<div class="tool-card">
+  <h2>GC Content Sliding Window (Python)</h2>
+  <textarea id="gc-seq">>Example
+ATGCGTACCTGAATCGATCGATCGATCGTACGTTAGCTAGCTAGCGATCGTAGCTAGCTAGCTAGC</textarea><br>
+  Window: <input id="gc-win" type="number" value="10" min="1" style="width:60px">
+  Step: <input id="gc-step" type="number" value="1" min="1" style="width:60px"><br>
+  <button id="gc-run">Run GC Analysis</button>
+  <canvas id="gc-canvas"></canvas>
+  <div id="gc-tooltip" class="tooltip"></div>
+</div>
 
 <script>
   let pyodide = null;
-  let points = [];
-  let canvas = document.getElementById('plot');
-  let tip = document.getElementById('tooltip');
-  let ctx = canvas.getContext('2d');
 
-  async function setup() {
+  async function initPy() {
     pyodide = await loadPyodide();
     await pyodide.runPythonAsync(`
-def parse(seq):
-    lines = seq.strip().split('\n')
-    if lines[0].startswith('>'): lines = lines[1:]
-    return ''.join(line.strip().upper() for line in lines if line.strip())
+def reverse_complement(seq):
+    complement = {'A':'T','T':'A','C':'G','G':'C','N':'N'}
+    return ''.join(complement.get(base.upper(), 'N') for base in reversed(seq))
 
-def sliding_gc(seq, win, step):
-    out = []
-    L = len(seq)
-    for i in range(0, L - win + 1, step):
-        sub = seq[i:i+win]
-        gc = sum(1 for b in sub if b in 'GC')
-        gc_pct = (gc / win) * 100
-        out.append((i + 1, gc_pct))
-    return out
+def parse_fasta(text):
+    lines = text.strip().splitlines()
+    return ''.join(line.strip() for line in lines if not line.startswith('>'))
+
+def sliding_gc(seq, win=10, step=1):
+    seq = seq.upper()
+    gc_results = []
+    for i in range(0, len(seq) - win + 1, step):
+        window = seq[i:i+win]
+        g = window.count('G')
+        c = window.count('C')
+        a = window.count('A')
+        t = window.count('T')
+        n = window.count('N')
+        denom = a + c + g + t
+        gc = (g + c) * 100 / denom if denom > 0 else 0
+        gc_results.append({"i": i, "gc": round(gc, 3)})
+    return gc_results
     `);
   }
 
-  document.getElementById('runBtn').addEventListener('click', async () => {
-    const raw = document.getElementById('seq').value;
-    const win = parseInt(document.getElementById('win').value);
-    const step = parseInt(document.getElementById('step').value);
-
-    const parsed = await pyodide.runPythonAsync(`parse(${JSON.stringify(raw)})`);
-    const result = await pyodide.runPythonAsync(`sliding_gc(${JSON.stringify(parsed)}, ${win}, ${step})`);
-
-    points = pyodide.toJs(result);
-    drawChart(points);
+  // Run reverse complement
+  document.getElementById('rev-run').addEventListener('click', async () => {
+    const seq = document.getElementById('rev-seq').value;
+    const result = await pyodide.runPythonAsync(`
+reverse_complement(${JSON.stringify(seq)})
+    `);
+    document.getElementById('rev-output').textContent = result;
   });
 
-  function drawChart(data) {
-    const width = canvas.width = canvas.clientWidth;
-    const height = canvas.height = canvas.clientHeight;
-    ctx.clearRect(0, 0, width, height);
-    if (!data.length) return;
+  // GC Plotting Logic
+  document.getElementById('gc-run').addEventListener('click', async () => {
+    const seq = document.getElementById('gc-seq').value;
+    const win = parseInt(document.getElementById('gc-win').value);
+    const step = parseInt(document.getElementById('gc-step').value);
 
-    const xVals = data.map(d => d[0]);
-    const yVals = data.map(d => d[1]);
-    const maxX = Math.max(...xVals);
-    const maxY = 100;
+    const cleanedSeq = await pyodide.runPythonAsync(`
+parse_fasta(${JSON.stringify(seq)})
+    `);
+    const gcData = await pyodide.runPythonAsync(`
+sliding_gc(${JSON.stringify(cleanedSeq)}, win=${win}, step=${step})
+    `);
+    const results = pyodide.toJs(gcData);
+
+    drawGCChart(results);
+  });
+
+  // Chart drawer
+  const canvas = document.getElementById('gc-canvas');
+  const ctx = canvas.getContext('2d');
+  const tooltip = document.getElementById('gc-tooltip');
+  let chartPoints = [];
+
+  function drawGCChart(data) {
+    const width = canvas.width = canvas.offsetWidth;
+    const height = canvas.height = 300;
+
+    ctx.clearRect(0, 0, width, height);
+    const maxGC = 100;
     const pad = 40;
 
+    // Scale
+    const xScale = (width - 2 * pad) / (data.length - 1 || 1);
+    const yScale = (height - 2 * pad) / maxGC;
+
+    // Axes
     ctx.beginPath();
-    ctx.moveTo(pad, height - pad);
-    for (let i = 0; i < data.length; i++) {
-      const x = pad + (xVals[i] / maxX) * (width - 2 * pad);
-      const y = height - pad - (yVals[i] / maxY) * (height - 2 * pad);
-      ctx.lineTo(x, y);
-    }
-    ctx.strokeStyle = '#2c7';
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, height - pad);
+    ctx.lineTo(width - pad, height - pad);
+    ctx.strokeStyle = "#444";
+    ctx.stroke();
+
+    // Line
+    ctx.beginPath();
+    chartPoints = [];
+    data.forEach((pt, i) => {
+      const x = pad + i * xScale;
+      const y = height - pad - pt.gc * yScale;
+      chartPoints.push({x, y, ...pt});
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#007bff";
     ctx.lineWidth = 2;
     ctx.stroke();
   }
 
-  canvas.addEventListener('mousemove', ev => {
-    if (!points.length) return;
+  // Hover tooltips
+  canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
-    const mx = ev.clientX - rect.left;
-    const my = ev.clientY - rect.top;
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    const pad = 40;
-
-    let best = null;
-    let bestDist = Infinity;
-
-    for (let i = 0; i < points.length; i++) {
-      const [xval, yval] = points[i];
-      const x = pad + (xval / points[points.length - 1][0]) * (width - 2 * pad);
-      const y = height - pad - (yval / 100) * (height - 2 * pad);
-      const dx = Math.abs(mx - x);
-      const dy = Math.abs(my - y);
-      const dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = { x, y, xval, yval };
+    let nearest = null;
+    let minDx = Infinity;
+    for (const pt of chartPoints) {
+      const dx = Math.abs(mx - pt.x);
+      if (dx < minDx && dx < 20) {
+        nearest = pt;
+        minDx = dx;
       }
     }
 
-    if (bestDist < 400) {
-      tip.style.left = (ev.clientX + 10) + 'px';
-      tip.style.top = (ev.clientY + 10) + 'px';
-      tip.innerHTML = `Start: ${best.xval} bp<br>GC: ${best.yval.toFixed(2)}%`;
-      tip.style.display = 'block';
+    if (nearest) {
+      tooltip.innerHTML = `Window ${nearest.i} → GC: <strong>${nearest.gc}%</strong>`;
+      tooltip.style.left = `${nearest.x + rect.left + 10}px`;
+      tooltip.style.top = `${nearest.y + rect.top - 30}px`;
+      tooltip.style.display = 'block';
     } else {
-      tip.style.display = 'none';
+      tooltip.style.display = 'none';
     }
   });
 
-  setup();
+  canvas.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+  });
+
+  // Initialize
+  initPy();
 </script>
 </body>
 </html>
