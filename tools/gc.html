@@ -61,7 +61,17 @@ ATGCGTGCTTAGCGGCT..."></textarea>
     <!-- Chart card -->
     <section class="card mt-4">
       <h3 class="mb-2">GC% by window</h3>
-      <canvas id="chart" style="width:100%; height:300px;"></canvas>
+      <!-- Wrapper so we can absolutely-position a tooltip on top of the canvas -->
+      <div id="chartWrap" style="position:relative; width:100%; height:300px;">
+        <canvas id="chart" style="width:100%; height:100%;"></canvas>
+        <div id="tooltip" style="
+          position:absolute; pointer-events:none; display:none;
+          background: var(--surface, #f9fafb); color: var(--text, #1f2937);
+          border:1px solid var(--border, #e5e7eb); border-radius:10px;
+          padding:8px 10px; font-size:12px; box-shadow: var(--shadow, 0 6px 20px rgba(0,0,0,.06));
+          white-space:nowrap;
+        "></div>
+      </div>
     </section>
 
     <!-- Table card -->
@@ -92,35 +102,35 @@ ATGCGTGCTTAGCGGCT..."></textarea>
   </div>
 
   <script>
-    // -------- Helpers --------
-    function cleanSequence(raw){
+    /* ---------- Helpers ---------- */
+    function cleanSequence(raw) {
       // Remove FASTA headers and whitespace, keep only A/C/G/T/N (case-insensitive)
       const lines = raw.split(/[\r\n]+/).filter(l => !l.startsWith('>'));
       const seq = lines.join('').toUpperCase().replace(/[^ACGTN]/g, '');
       return seq;
     }
 
-    function overallGC(seq, ignoreN=true){
+    function countBases(s) {
+      let A = 0, C = 0, G = 0, T = 0, N = 0;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === 'A') A++;
+        else if (ch === 'C') C++;
+        else if (ch === 'G') G++;
+        else if (ch === 'T') T++;
+        else N++;
+      }
+      return { A, C, G, T, N };
+    }
+
+    function overallGC(seq, ignoreN = true) {
       const counts = countBases(seq);
       const denom = ignoreN ? (counts.A + counts.C + counts.G + counts.T) : seq.length;
       const gc = denom > 0 ? ((counts.G + counts.C) / denom) * 100 : 0;
       return { gc, counts, denom };
     }
 
-    function countBases(s){
-      let A=0,C=0,G=0,T=0,N=0;
-      for(let i=0;i<s.length;i++){
-        const ch = s[i];
-        if(ch==='A') A++;
-        else if(ch==='C') C++;
-        else if(ch==='G') G++;
-        else if(ch==='T') T++;
-        else N++;
-      }
-      return {A,C,G,T,N};
-    }
-
-    function slidingGC(seq, win=100, step=10, ignoreN=true){
+    function slidingGC(seq, win = 100, step = 10, ignoreN = true) {
       const out = [];
       if (seq.length === 0) return out;
 
@@ -128,54 +138,54 @@ ATGCGTGCTTAGCGGCT..."></textarea>
       if (win >= seq.length) {
         const sub = seq;
         const counts = countBases(sub);
-        const denom = ignoreN ? (counts.A+counts.C+counts.G+counts.T) : sub.length;
-        const gc = denom > 0 ? ((counts.G+counts.C)/denom)*100 : 0;
+        const denom = ignoreN ? (counts.A + counts.C + counts.G + counts.T) : sub.length;
+        const gc = denom > 0 ? ((counts.G + counts.C) / denom) * 100 : 0;
         out.push({
           index: 1,
           start: 1,
           end: seq.length,
           len: sub.length,
           gc: +gc.toFixed(3),
-          gcCount: counts.G+counts.C,
-          atCount: counts.A+counts.T,
+          gcCount: counts.G + counts.C,
+          atCount: counts.A + counts.T,
           nCount: counts.N
         });
         return out;
       }
 
       let idx = 0;
-      for(let start=0; start < seq.length; start += step){
+      for (let start = 0; start < seq.length; start += step) {
         const end = Math.min(start + win, seq.length);
         if (end - start < win) break; // enforce full windows only
         const sub = seq.slice(start, end);
         const counts = countBases(sub);
-        const denom = ignoreN ? (counts.A+counts.C+counts.G+counts.T) : sub.length;
-        const gc = denom > 0 ? ((counts.G+counts.C)/denom)*100 : 0;
+        const denom = ignoreN ? (counts.A + counts.C + counts.G + counts.T) : sub.length;
+        const gc = denom > 0 ? ((counts.G + counts.C) / denom) * 100 : 0;
         idx++;
         out.push({
           index: idx,
-          start: start+1,   // 1-based
+          start: start + 1, // 1-based
           end: end,
           len: sub.length,
           gc: +gc.toFixed(3),
-          gcCount: counts.G+counts.C,
-          atCount: counts.A+counts.T,
+          gcCount: counts.G + counts.C,
+          atCount: counts.A + counts.T,
           nCount: counts.N
         });
       }
       return out;
     }
 
-    function toCSV(rows){
-      const header = ["index","start","end","len","gc","gcCount","atCount","nCount"];
+    function toCSV(rows) {
+      const header = ["index", "start", "end", "len", "gc", "gcCount", "atCount", "nCount"];
       const lines = [header.join(",")];
-      for(const r of rows){
-        lines.push([r.index,r.start,r.end,r.len,r.gc,r.gcCount,r.atCount,r.nCount].join(","));
+      for (const r of rows) {
+        lines.push([r.index, r.start, r.end, r.len, r.gc, r.gcCount, r.atCount, r.nCount].join(","));
       }
       return lines.join("\n");
     }
 
-    function download(filename, dataURLorBlob){
+    function download(filename, dataURLorBlob) {
       const a = document.createElement('a');
       if (dataURLorBlob instanceof Blob) {
         a.href = URL.createObjectURL(dataURLorBlob);
@@ -188,27 +198,40 @@ ATGCGTGCTTAGCGGCT..."></textarea>
       a.remove();
     }
 
-    // -------- Chart (Canvas) --------
-    function drawChart(canvas, data){
+    /* ---------- Chart utilities (quantitative x + hover) ---------- */
+
+    // Choose a "nice" numeric tick step close to the desired spacing
+    function niceStep(rawStep) {
+      const pow = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+      const candidates = [1, 2, 5, 10].map(m => m * pow);
+      return candidates.find(c => c >= rawStep) ?? candidates[candidates.length - 1];
+    }
+
+    // Draw the chart and return metadata for hover (points, scales, pad)
+    function drawChart(canvas, data, activeIndex = -1) {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(300 * dpr);
+      const cssW = rect.width, cssH = rect.height || 300;
+
+      canvas.width = Math.floor(cssW * dpr);
+      canvas.height = Math.floor(cssH * dpr);
 
       const ctx = canvas.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Padding
-      const pad = { left: 50, right: 20, top: 10, bottom: 30 };
-      const W = rect.width, H = 300;
+      const pad = { left: 60, right: 20, top: 12, bottom: 36 };
+      const W = cssW, H = cssH;
       const plotW = W - pad.left - pad.right;
       const plotH = H - pad.top - pad.bottom;
 
-      // Background
-      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--surface') || '#f9fafb';
-      ctx.fillRect(0,0,W,H);
+      const surface = getComputedStyle(document.body).getPropertyValue('--surface') || '#f9fafb';
+      const textCol = getComputedStyle(document.body).getPropertyValue('--text') || '#1f2937';
+      const primary = getComputedStyle(document.body).getPropertyValue('--primary') || '#0ea5e9';
 
-      // Axes
+      // Background + axes box
+      ctx.fillStyle = surface;
+      ctx.fillRect(0, 0, W, H);
+
       ctx.strokeStyle = '#bbb';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -219,23 +242,27 @@ ATGCGTGCTTAGCGGCT..."></textarea>
 
       if (!data || data.length === 0) {
         ctx.fillStyle = '#888';
+        ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
         ctx.fillText('No data to plot', pad.left + 10, pad.top + 20);
-        return;
+        return { points: [], scales: null, pad };
       }
 
-      // Scales
-      const xs = data.map((d,i)=> i); // index along x
-      const ys = data.map(d=> d.gc);
-      const xMin = 0, xMax = xs.length - 1;
-      const yMin = 0, yMax = Math.max(100, Math.ceil(Math.max(...ys)));
+      // Scales: x = window start position (bp), y = GC%
+      const xs = data.map(d => d.start);
+      const ys = data.map(d => d.gc);
 
-      const xScale = (x)=> pad.left + ( (x - xMin) / Math.max(1, (xMax - xMin)) ) * plotW;
-      const yScale = (y)=> pad.top + plotH - ( (y - yMin) / (yMax - yMin) ) * plotH;
+      const xMin = Math.min(...xs);
+      const xMax = Math.max(...xs);
+      const yMin = 0;
+      const yMax = Math.max(100, Math.ceil(Math.max(...ys)));
 
-      // Gridlines (y)
+      const xScale = (x) => pad.left + ((x - xMin) / Math.max(1, (xMax - xMin))) * plotW;
+      const yScale = (y) => pad.top + plotH - ((y - yMin) / (yMax - yMin)) * plotH;
+
+      // Gridlines: Y (0..100)
       ctx.strokeStyle = '#e5e7eb';
       ctx.lineWidth = 1;
-      ctx.setLineDash([4,4]);
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
       for (let gy = 0; gy <= 100; gy += 20) {
         const y = yScale(gy);
@@ -246,29 +273,64 @@ ATGCGTGCTTAGCGGCT..."></textarea>
       ctx.setLineDash([]);
 
       // Labels
-      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text') || '#1f2937';
+      ctx.fillStyle = textCol;
       ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillText('GC% (0–100)', 5, pad.top + 12);
-      ctx.fillText('Windows', pad.left + plotW - 60, pad.top + plotH + 22);
-
-      // Y ticks (0–100)
+      // y ticks & title
       for (let gy = 0; gy <= 100; gy += 20) {
         const y = yScale(gy);
         ctx.fillText(String(gy), 12, y + 4);
       }
+      ctx.fillText('GC% (0–100)', 6, pad.top + 12);
+
+      // X ticks: choose a nice step for ~6–10 ticks
+      const targetTicks = Math.max(6, Math.min(10, Math.floor(plotW / 90)));
+      const rawStep = (xMax - xMin) / Math.max(1, targetTicks);
+      const step = rawStep > 0 ? niceStep(rawStep) : 1;
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (let gx = Math.ceil(xMin / step) * step; gx <= xMax + 1e-6; gx += step) {
+        const x = xScale(gx);
+        // vertical gridline (light)
+        ctx.strokeStyle = '#f0f2f5';
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top);
+        ctx.lineTo(x, pad.top + plotH);
+        ctx.stroke();
+        // label
+        ctx.fillStyle = textCol;
+        ctx.fillText(gx.toLocaleString(), x, pad.top + plotH + 6);
+      }
+      ctx.textAlign = 'right';
+      ctx.fillText('Position (bp, window start)', pad.left + plotW, pad.top + plotH + 22);
+      ctx.textAlign = 'left';
 
       // Line
-      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary') || '#0ea5e9';
+      ctx.strokeStyle = primary;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(xScale(0), yScale(ys[0]));
-      for (let i=1;i<xs.length;i++){
+      ctx.moveTo(xScale(xs[0]), yScale(ys[0]));
+      for (let i = 1; i < xs.length; i++) {
         ctx.lineTo(xScale(xs[i]), yScale(ys[i]));
       }
       ctx.stroke();
+
+      // Prepare screen points for hover
+      const points = xs.map((x, i) => ({ x: xScale(x), y: yScale(ys[i]) }));
+
+      // Active (hover) marker
+      if (activeIndex >= 0 && activeIndex < points.length) {
+        const p = points[activeIndex];
+        ctx.fillStyle = primary;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      return { points, scales: { xMin, xMax, yMin, yMax, xScale, yScale }, pad };
     }
 
-    // -------- UI wiring --------
+    /* ---------- UI wiring ---------- */
     const els = {
       seq: document.getElementById('seq'),
       win: document.getElementById('win'),
@@ -285,21 +347,21 @@ ATGCGTGCTTAGCGGCT..."></textarea>
 
     let lastResults = [];
 
-    function renderSummary(seqLen, win, step, overall, nWindows){
+    function renderSummary(seqLen, win, step, overall, nWindows) {
       const gc = overall.gc.toFixed(3);
-      const {A,C,G,T,N} = overall.counts;
+      const { A, C, G, T } = overall.counts;
       const denom = overall.denom;
       els.summary.innerHTML = `
         <div><strong>Sequence length:</strong> ${seqLen.toLocaleString()} bp</div>
-        <div><strong>Overall GC%:</strong> ${gc}% (GC=${(G+C).toLocaleString()} / denom=${denom.toLocaleString()})</div>
+        <div><strong>Overall GC%:</strong> ${gc}% (GC=${(G + C).toLocaleString()} / denom=${denom.toLocaleString()})</div>
         <div><strong>Windows:</strong> ${nWindows} (window=${win}, step=${step})</div>
         <div class="muted mt-2">Tip: If you get 0 windows, decrease window size or step.</div>
       `;
     }
 
-    function renderTable(rows){
+    function renderTable(rows) {
       const frag = document.createDocumentFragment();
-      for(const r of rows){
+      for (const r of rows) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${r.index}</td>
@@ -317,7 +379,15 @@ ATGCGTGCTTAGCGGCT..."></textarea>
       els.tableBody.appendChild(frag);
     }
 
-    function runAnalysis(){
+    // Paint helper that also stores chart metadata for hover
+    let chartMeta = null;
+    let activeIdx = -1;
+    function repaint(active = -1) {
+      activeIdx = active;
+      chartMeta = drawChart(els.chart, lastResults, activeIdx);
+    }
+
+    function runAnalysis() {
       const seqClean = cleanSequence(els.seq.value || '');
       const win = Math.max(1, parseInt(els.win.value || '100', 10));
       const step = Math.max(1, parseInt(els.step.value || '10', 10));
@@ -329,7 +399,7 @@ ATGCGTGCTTAGCGGCT..."></textarea>
 
       renderSummary(seqClean.length, win, step, overall, results.length);
       renderTable(results);
-      drawChart(els.chart, results);
+      repaint(-1); // draw chart + reset hover
 
       // Enable downloads if we have data
       const has = results.length > 0;
@@ -337,12 +407,12 @@ ATGCGTGCTTAGCGGCT..."></textarea>
       els.downloadPNG.disabled = !has;
     }
 
-    // Example sequence (E. coli fragment-like)
+    // Example sequence (E. coli-like fragment)
     const EXAMPLE_FASTA = `>example
 ATGCGTCTGATCGATCGGCTAGCTAGGCTAGCTGATCGATCGATCGTTGCGCGATATATATATGCGCGCGCTTTTTTT
 GGCCATATATGCGCGCGCTAGCTAGCTAGCTAGCTGATCGATGCGCGCGATATATATATATATATGCGCGCGCTAGC`;
 
-    // Event handlers
+    // Events
     els.loadExample.addEventListener('click', () => {
       els.seq.value = EXAMPLE_FASTA;
     });
@@ -351,24 +421,76 @@ GGCCATATATGCGCGCGCTAGCTAGCTAGCTAGCTGATCGATGCGCGCGATATATATATATATATGCGCGCGCTAGC`;
 
     els.downloadCSV.addEventListener('click', () => {
       const csv = toCSV(lastResults);
-      const blob = new Blob([csv], {type: 'text/csv'});
+      const blob = new Blob([csv], { type: 'text/csv' });
       download('gc_windows.csv', blob);
     });
 
     els.downloadPNG.addEventListener('click', () => {
-      // Repaint to ensure correct size, then download
-      drawChart(els.chart, lastResults);
+      repaint(activeIdx); // ensure current size/marker
       const dataURL = els.chart.toDataURL('image/png');
       download('gc_chart.png', dataURL);
     });
 
-    // Redraw chart on resize for responsiveness
     window.addEventListener('resize', () => {
-      drawChart(els.chart, lastResults);
+      repaint(activeIdx);
     });
 
-    // Optional: run automatically if user pastes right away
-    // runAnalysis();
+    /* ---------- Hover detection + tooltip ---------- */
+    const wrap = document.getElementById('chartWrap');
+    const tip = document.getElementById('tooltip');
+
+    function handleMove(ev) {
+      if (!chartMeta || !lastResults.length) return;
+
+      const rect = wrap.getBoundingClientRect();
+      const mx = ev.clientX - rect.left;
+      const my = ev.clientY - rect.top;
+
+      // Find nearest point by horizontal distance
+      let nearest = -1, bestDx = Infinity;
+      for (let i = 0; i < chartMeta.points.length; i++) {
+        const dx = Math.abs(chartMeta.points[i].x - mx);
+        if (dx < bestDx) { bestDx = dx; nearest = i; }
+      }
+
+      // Show tooltip if close enough to the line
+      if (nearest >= 0 && bestDx <= 16) {
+        const row = lastResults[nearest];
+        repaint(nearest); // draw marker at active point
+
+        tip.innerHTML = `
+          <div><strong>Window ${row.index}</strong></div>
+          <div>${row.start.toLocaleString()}–${row.end.toLocaleString()} bp</div>
+          <div>GC: <strong>${row.gc.toFixed(3)}%</strong></div>
+        `;
+
+        // Position tooltip near mouse but keep inside the wrapper
+        const pad = 12;
+        let tx = mx + 12, ty = my + 12;
+        const tipRect = tip.getBoundingClientRect(); // may be stale before display
+        const approxW = tipRect.width || 160;
+        const approxH = tipRect.height || 60;
+        const maxX = rect.width - approxW - pad;
+        const maxY = rect.height - approxH - pad;
+        if (tx > maxX) tx = Math.max(pad, mx - approxW - 12);
+        if (ty > maxY) ty = Math.max(pad, my - approxH - 12);
+
+        tip.style.left = `${tx}px`;
+        tip.style.top = `${ty}px`;
+        tip.style.display = 'block';
+      } else {
+        tip.style.display = 'none';
+        if (activeIdx !== -1) repaint(-1);
+      }
+    }
+
+    function handleLeave() {
+      tip.style.display = 'none';
+      if (activeIdx !== -1) repaint(-1);
+    }
+
+    wrap.addEventListener('mousemove', handleMove);
+    wrap.addEventListener('mouseleave', handleLeave);
   </script>
 </body>
 </html>
