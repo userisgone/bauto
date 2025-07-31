@@ -1,1 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GC Content (Sliding Window)</title>
+  <link rel="stylesheet" href="../styles/site.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="brand">GC Content (Sliding Window)</div>
+      <nav>
+        <a href="../index.html">Home</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h1>Compute GC% across a sequence with a sliding window</h1>
+      <p class="muted">Runs entirely in your browser. Paste FASTA or raw DNA sequence. Export results as CSV and chart as PNG.</p>
+    </section>
+
+    <!-- Input card -->
+    <section class="card mt-4">
+      <h3 class="mb-2">Input</h3>
+      <label class="mb-2">Sequence (FASTA or raw DNA)</label>
+      <textarea id="seq" class="textarea" placeholder=">example
+ATGCGTGCTTAGCGGCT..."></textarea>
+
+      <div class="grid mt-3">
+        <div class="col-4">
+          <label>Window size (bp)</label>
+          <input id="win" class="input" type="number" min="1" value="100" />
+        </div>
+        <div class="col-4">
+          <label>Step size (bp)</label>
+          <input id="step" class="input" type="number" min="1" value="10" />
+        </div>
+        <div class="col-4" style="display:flex; align-items:flex-end;">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input id="ignoreN" type="checkbox" checked />
+            Ignore “N” in denominator
+          </label>
+        </div>
+      </div>
+
+      <div class="mt-3" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="loadExample" class="btn secondary">Load example</button>
+        <button id="run" class="btn">Run analysis</button>
+        <button id="downloadCSV" class="btn secondary" disabled>Download CSV</button>
+        <button id="downloadPNG" class="btn secondary" disabled>Download chart (PNG)</button>
+      </div>
+    </section>
+
+    <!-- Summary card -->
+    <section class="card mt-4">
+      <h3 class="mb-2">Summary</h3>
+      <div id="summary" class="muted">No results yet. Paste a sequence and click “Run analysis”.</div>
+    </section>
+
+    <!-- Chart card -->
+    <section class="card mt-4">
+      <h3 class="mb-2">GC% by window</h3>
+      <canvas id="chart" style="width:100%; height:300px;"></canvas>
+    </section>
+
+    <!-- Table card -->
+    <section class="card mt-4">
+      <h3 class="mb-2">Results table</h3>
+      <div style="overflow:auto;">
+        <table class="table" id="resultsTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Start (1‑based)</th>
+              <th>End</th>
+              <th>Window length</th>
+              <th>GC%</th>
+              <th>GC count</th>
+              <th>AT count</th>
+              <th>N/Other</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="footer">
+      © 2025 Emma Barton · All processing happens in your browser.
+    </footer>
+  </div>
+
+  <script>
+    // -------- Helpers --------
+    function cleanSequence(raw){
+      // Remove FASTA headers and whitespace, keep only A/C/G/T/N (case-insensitive)
+      const lines = raw.split(/[\r\n]+/).filter(l => !l.startsWith('>'));
+      const seq = lines.join('').toUpperCase().replace(/[^ACGTN]/g, '');
+      return seq;
+    }
+
+    function overallGC(seq, ignoreN=true){
+      const counts = countBases(seq);
+      const denom = ignoreN ? (counts.A + counts.C + counts.G + counts.T) : seq.length;
+      const gc = denom > 0 ? ((counts.G + counts.C) / denom) * 100 : 0;
+      return { gc, counts, denom };
+    }
+
+    function countBases(s){
+      let A=0,C=0,G=0,T=0,N=0;
+      for(let i=0;i<s.length;i++){
+        const ch = s[i];
+        if(ch==='A') A++;
+        else if(ch==='C') C++;
+        else if(ch==='G') G++;
+        else if(ch==='T') T++;
+        else N++;
+      }
+      return {A,C,G,T,N};
+    }
+
+    function slidingGC(seq, win=100, step=10, ignoreN=true){
+      const out = [];
+      if (seq.length === 0) return out;
+
+      // If window is larger than sequence, compute a single window
+      if (win >= seq.length) {
+        const sub = seq;
+        const counts = countBases(sub);
+        const denom = ignoreN ? (counts.A+counts.C+counts.G+counts.T) : sub.length;
+        const gc = denom > 0 ? ((counts.G+counts.C)/denom)*100 : 0;
+        out.push({
+          index: 1,
+          start: 1,
+          end: seq.length,
+          len: sub.length,
+          gc: +gc.toFixed(3),
+          gcCount: counts.G+counts.C,
+          atCount: counts.A+counts.T,
+          nCount: counts.N
+        });
+        return out;
+      }
+
+      let idx = 0;
+      for(let start=0; start < seq.length; start += step){
+        const end = Math.min(start + win, seq.length);
+        if (end - start < win) break; // enforce full windows only
+        const sub = seq.slice(start, end);
+        const counts = countBases(sub);
+        const denom = ignoreN ? (counts.A+counts.C+counts.G+counts.T) : sub.length;
+        const gc = denom > 0 ? ((counts.G+counts.C)/denom)*100 : 0;
+        idx++;
+        out.push({
+          index: idx,
+          start: start+1,   // 1-based
+          end: end,
+          len: sub.length,
+          gc: +gc.toFixed(3),
+          gcCount: counts.G+counts.C,
+          atCount: counts.A+counts.T,
+          nCount: counts.N
+        });
+      }
+      return out;
+    }
+
+    function toCSV(rows){
+      const header = ["index","start","end","len","gc","gcCount","atCount","nCount"];
+      const lines = [header.join(",")];
+      for(const r of rows){
+        lines.push([r.index,r.start,r.end,r.len,r.gc,r.gcCount,r.atCount,r.nCount].join(","));
+      }
+      return lines.join("\n");
+    }
+
+    function download(filename, dataURLorBlob){
+      const a = document.createElement('a');
+      if (dataURLorBlob instanceof Blob) {
+        a.href = URL.createObjectURL(dataURLorBlob);
+      } else {
+        a.href = dataURLorBlob;
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    // -------- Chart (Canvas) --------
+    function drawChart(canvas, data){
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(300 * dpr);
+
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+
+      // Padding
+      const pad = { left: 50, right: 20, top: 10, bottom: 30 };
+      const W = rect.width, H = 300;
+      const plotW = W - pad.left - pad.right;
+      const plotH = H - pad.top - pad.bottom;
+
+      // Background
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--surface') || '#f9fafb';
+      ctx.fillRect(0,0,W,H);
+
+      // Axes
+      ctx.strokeStyle = '#bbb';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, pad.top);
+      ctx.lineTo(pad.left, pad.top + plotH);
+      ctx.lineTo(pad.left + plotW, pad.top + plotH);
+      ctx.stroke();
+
+      if (!data || data.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.fillText('No data to plot', pad.left + 10, pad.top + 20);
+        return;
+      }
+
+      // Scales
+      const xs = data.map((d,i)=> i); // index along x
+      const ys = data.map(d=> d.gc);
+      const xMin = 0, xMax = xs.length - 1;
+      const yMin = 0, yMax = Math.max(100, Math.ceil(Math.max(...ys)));
+
+      const xScale = (x)=> pad.left + ( (x - xMin) / Math.max(1, (xMax - xMin)) ) * plotW;
+      const yScale = (y)=> pad.top + plotH - ( (y - yMin) / (yMax - yMin) ) * plotH;
+
+      // Gridlines (y)
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath();
+      for (let gy = 0; gy <= 100; gy += 20) {
+        const y = yScale(gy);
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + plotW, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Labels
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text') || '#1f2937';
+      ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillText('GC% (0–100)', 5, pad.top + 12);
+      ctx.fillText('Windows', pad.left + plotW - 60, pad.top + plotH + 22);
+
+      // Y ticks (0–100)
+      for (let gy = 0; gy <= 100; gy += 20) {
+        const y = yScale(gy);
+        ctx.fillText(String(gy), 12, y + 4);
+      }
+
+      // Line
+      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary') || '#0ea5e9';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(xScale(0), yScale(ys[0]));
+      for (let i=1;i<xs.length;i++){
+        ctx.lineTo(xScale(xs[i]), yScale(ys[i]));
+      }
+      ctx.stroke();
+    }
+
+    // -------- UI wiring --------
+    const els = {
+      seq: document.getElementById('seq'),
+      win: document.getElementById('win'),
+      step: document.getElementById('step'),
+      ignoreN: document.getElementById('ignoreN'),
+      run: document.getElementById('run'),
+      loadExample: document.getElementById('loadExample'),
+      downloadCSV: document.getElementById('downloadCSV'),
+      downloadPNG: document.getElementById('downloadPNG'),
+      summary: document.getElementById('summary'),
+      tableBody: document.querySelector('#resultsTable tbody'),
+      chart: document.getElementById('chart'),
+    };
+
+    let lastResults = [];
+
+    function renderSummary(seqLen, win, step, overall, nWindows){
+      const gc = overall.gc.toFixed(3);
+      const {A,C,G,T,N} = overall.counts;
+      const denom = overall.denom;
+      els.summary.innerHTML = `
+        <div><strong>Sequence length:</strong> ${seqLen.toLocaleString()} bp</div>
+        <div><strong>Overall GC%:</strong> ${gc}% (GC=${(G+C).toLocaleString()} / denom=${denom.toLocaleString()})</div>
+        <div><strong>Windows:</strong> ${nWindows} (window=${win}, step=${step})</div>
+        <div class="muted mt-2">Tip: If you get 0 windows, decrease window size or step.</div>
+      `;
+    }
+
+    function renderTable(rows){
+      const frag = document.createDocumentFragment();
+      for(const r of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.index}</td>
+          <td>${r.start}</td>
+          <td>${r.end}</td>
+          <td>${r.len}</td>
+          <td>${r.gc.toFixed(3)}</td>
+          <td>${r.gcCount}</td>
+          <td>${r.atCount}</td>
+          <td>${r.nCount}</td>
+        `;
+        frag.appendChild(tr);
+      }
+      els.tableBody.innerHTML = '';
+      els.tableBody.appendChild(frag);
+    }
+
+    function runAnalysis(){
+      const seqClean = cleanSequence(els.seq.value || '');
+      const win = Math.max(1, parseInt(els.win.value || '100', 10));
+      const step = Math.max(1, parseInt(els.step.value || '10', 10));
+      const ignoreN = !!els.ignoreN.checked;
+
+      const overall = overallGC(seqClean, ignoreN);
+      const results = slidingGC(seqClean, win, step, ignoreN);
+      lastResults = results;
+
+      renderSummary(seqClean.length, win, step, overall, results.length);
+      renderTable(results);
+      drawChart(els.chart, results);
+
+      // Enable downloads if we have data
+      const has = results.length > 0;
+      els.downloadCSV.disabled = !has;
+      els.downloadPNG.disabled = !has;
+    }
+
+    // Example sequence (E. coli fragment-like)
+    const EXAMPLE_FASTA = `>example
+ATGCGTCTGATCGATCGGCTAGCTAGGCTAGCTGATCGATCGATCGTTGCGCGATATATATATGCGCGCGCTTTTTTT
+GGCCATATATGCGCGCGCTAGCTAGCTAGCTAGCTGATCGATGCGCGCGATATATATATATATATGCGCGCGCTAGC`;
+
+    // Event handlers
+    els.loadExample.addEventListener('click', () => {
+      els.seq.value = EXAMPLE_FASTA;
+    });
+
+    els.run.addEventListener('click', runAnalysis);
+
+    els.downloadCSV.addEventListener('click', () => {
+      const csv = toCSV(lastResults);
+      const blob = new Blob([csv], {type: 'text/csv'});
+      download('gc_windows.csv', blob);
+    });
+
+    els.downloadPNG.addEventListener('click', () => {
+      // Repaint to ensure correct size, then download
+      drawChart(els.chart, lastResults);
+      const dataURL = els.chart.toDataURL('image/png');
+      download('gc_chart.png', dataURL);
+    });
+
+    // Redraw chart on resize for responsiveness
+    window.addEventListener('resize', () => {
+      drawChart(els.chart, lastResults);
+    });
+
+    // Optional: run automatically if user pastes right away
+    // runAnalysis();
+  </script>
+</body>
+</html>
 
