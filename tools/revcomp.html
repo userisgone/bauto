@@ -2,34 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reverse Complement</title>
-  <link rel="stylesheet" href="../styles/site.css">
+  <title>Reverse Complement (Python)</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; }
+    textarea { width: 100%; height: 100px; font-family: monospace; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem; }
+    pre { background: #f0f0f0; padding: 1rem; border-radius: 8px; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Reverse Complement</h1>
-    <p class="muted">Paste DNA below, then click run.</p>
 
-    <label class="mb-2">Input sequence</label>
-    <textarea id="seq" class="textarea" placeholder=">seq1
-ATGC..." ></textarea>
+<h1>Reverse Complement Tool (Python via Pyodide)</h1>
 
-    <button class="btn mt-3" id="run">Run</button>
+<label for="seq">Input DNA sequence:</label><br>
+<textarea id="seq">ATGCGTACCTGA</textarea><br>
 
-    <label class="mt-4 mb-2">Output</label>
-    <pre id="out" class="card" style="white-space: pre-wrap;"></pre>
-  </div>
+<button id="runBtn">Reverse Complement</button>
 
-  <script>
-    function reverseComplement(seq){
-      const map = {A:'T',T:'A',C:'G',G:'C',a:'t',t:'a',c:'g',g:'c'};
-      return seq.split('').reverse().map(b => map[b] ?? b).join('');
-    }
-    document.getElementById('run').addEventListener('click', () => {
-      const input = document.getElementById('seq').value;
-      document.getElementById('out').textContent = reverseComplement(input);
+<h3>Result</h3>
+<pre id="output">Click the button to run</pre>
+
+<script>
+  async function main() {
+    const pyodide = await loadPyodide();
+
+    // Define your Python function
+    await pyodide.runPythonAsync(`
+def reverse_complement(seq):
+    complement = {'A':'T','T':'A','C':'G','G':'C','N':'N'}
+    return ''.join(complement.get(base.upper(), 'N') for base in reversed(seq))
+    `);
+
+    // Hook up the button
+    document.getElementById('runBtn').addEventListener('click', async () => {
+      const seq = document.getElementById('seq').value;
+      const result = await pyodide.runPythonAsync(`
+reverse_complement(${JSON.stringify(seq)})
+      `);
+      document.getElementById('output').textContent = result;
     });
-  </script>
+  }
+
+  main();  // start Pyodide
+</script>
 </body>
 </html>
+
