@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GC Content Analyzer - Bauto</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: #fff;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.1rem;
+        }
+
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .tool-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .sequence-input {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s ease;
+        }
+
+        .sequence-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .control-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .control-group input, .control-group select {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            transition: border-color 0.3s ease;
+        }
+
+        .control-group input:focus, .control-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .analyze-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .analyze-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .visualization {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-bottom: 20px;
+        }
+
+        .sequence-visual {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .nucleotide {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .nucleotide:hover {
+            transform: scale(1.2);
+            z-index: 10;
+            position: relative;
+        }
+
+        .nucleotide.A { background-color: #ff6b6b; }
+        .nucleotide.T { background-color: #4ecdc4; }
+        .nucleotide.G { background-color: #45b7d1; }
+        .nucleotide.C { background-color: #f7b731; }
+        .nucleotide.U { background-color: #5f27cd; }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .gc-chart {
+            height: 200px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-bar {
+            position: absolute;
+            bottom: 0;
+            background: linear-gradient(to top, #667eea, #764ba2);
+            border-radius: 2px 2px 0 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .chart-bar:hover {
+            opacity: 0.8;
+            transform: scaleY(1.05);
+        }
+
+        .chart-axis {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .export-section {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .export-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .nucleotide {
+                width: 15px;
+                height: 15px;
+                font-size: 10px;
+            }
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-btn">
+        <i class="fas fa-arrow-left"></i>
+        Back to Bauto
+    </a>
+
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-dna"></i> GC Content Analyzer</h1>
+            <p>Analyze GC content across DNA/RNA sequences with visual feedback and statistical insights</p>
+        </div>
+
+        <div class="tool-section">
+            <div class="input-group">
+                <label for="sequence">DNA/RNA Sequence (FASTA format supported)</label>
+                <textarea 
+                    id="sequence" 
+                    class="sequence-input" 
+                    placeholder="Enter your DNA or RNA sequence here...
+Example:
+>Sample Sequence
+ATGCGATCGTAGCTAGCTAGCTAGCGATCGATCGATCGTAGCTAGCT
+GCGATCGATCGTAGCTAGCTAGCTAGCGATCGATCGATCGTAGCTAG"
+                ></textarea>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label for="windowSize">Window Size (bp)</label>
+                    <input type="number" id="windowSize" value="10" min="1" max="1000">
+                </div>
+                <div class="control-group">
+                    <label for="stepSize">Step Size (bp)</label>
+                    <input type="number" id="stepSize" value="1" min="1" max="100">
+                </div>
+                <div class="control-group">
+                    <label for="sequenceType">Sequence Type</label>
+                    <select id="sequenceType">
+                        <option value="DNA">DNA</option>
+                        <option value="RNA">RNA</option>
+                    </select>
+                </div>
+            </div>
+
+            <button class="analyze-btn" onclick="analyzeSequence()">
+                <i class="fas fa-chart-line"></i> Analyze GC Content
+            </button>
+        </div>
+
+        <div id="results" class="results" style="display: none;">
+            <div class="tool-section">
+                <h3>Analysis Results</h3>
+                <div id="stats" class="stats-grid"></div>
+                
+                <div class="visualization">
+                    <h4>Sequence Visualization</h4>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #ff6b6b;"></div>
+                            <span>A (Adenine)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #4ecdc4;"></div>
+                            <span id="legend-t">T (Thymine)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #45b7d1;"></div>
+                            <span>G (Guanine)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #f7b731;"></div>
+                            <span>C (Cytosine)</span>
+                        </div>
+                    </div>
+                    <div id="sequenceVisual" class="sequence-visual"></div>
+                </div>
+
+                <div class="visualization">
+                    <h4>GC Content Along Sequence</h4>
+                    <div id="gcChart" class="gc-chart"></div>
+                    <div class="chart-axis">
+                        <span>Position in Sequence</span>
+                    </div>
+                </div>
+
+                <div class="export-section">
+                    <button class="export-btn" onclick="exportResults('csv')">
+                        <i class="fas fa-download"></i> Export CSV
+                    </button>
+                    <button class="export-btn" onclick="exportResults('json')">
+                        <i class="fas fa-download"></i> Export JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        let analysisData = {};
+
+        function analyzeSequence() {
+            const sequenceInput = document.getElementById('sequence').value.trim();
+            const windowSize = parseInt(document.getElementById('windowSize').value);
+            const stepSize = parseInt(document.getElementById('stepSize').value);
+            const sequenceType = document.getElementById('sequenceType').value;
+
+            // Clear previous results
+            document.getElementById('results').style.display = 'none';
+
+            // Validate input
+            if (!sequenceInput) {
+                showError('Please enter a sequence to analyze.');
+                return;
+            }
+
+            if (windowSize < 1 || stepSize < 1) {
+                showError('Window size and step size must be positive integers.');
+                return;
+            }
+
+            // Parse sequence (handle FASTA format)
+            let sequence = parseSequence(sequenceInput);
+            
+            // Validate sequence characters
+            const validChars = sequenceType === 'DNA' ? 'ATGC' : 'AUGC';
+            const invalidChars = sequence.split('').filter(char => !validChars.includes(char.toUpperCase()));
+            
+            if (invalidChars.length > 0) {
+                showError(`Invalid characters detected: ${[...new Set(invalidChars)].join(', ')}. Please use only ${validChars.split('').join(', ')} for ${sequenceType}.`);
+                return;
+            }
+
+            sequence = sequence.toUpperCase();
+
+            if (sequence.length < windowSize) {
+                showError(`Sequence length (${sequence.length}) is shorter than window size (${windowSize}).`);
+                return;
+            }
+
+            // Perform analysis
+            const results = performGCAnalysis(sequence, windowSize, stepSize, sequenceType);
+            
+            // Store results for export
+            analysisData = {
+                sequence: sequence,
+                windowSize: windowSize,
+                stepSize: stepSize,
+                sequenceType: sequenceType,
+                results: results
+            };
+
+            // Display results
+            displayResults(results, sequence, sequenceType);
+        }
+
+        function parseSequence(input) {
+            // Remove FASTA header and whitespace
+            return input.replace(/^>.*$/gm, '').replace(/\s/g, '');
+        }
+
+        function performGCAnalysis(sequence, windowSize, stepSize, sequenceType) {
+            const results = {
+                length: sequence.length,
+                windows: [],
+                overallStats: {}
+            };
+
+            // Calculate overall statistics
+            const nucleotideCounts = {
+                A: (sequence.match(/A/g) || []).length,
+                T: sequenceType === 'DNA' ? (sequence.match(/T/g) || []).length : 0,
+                U: sequenceType === 'RNA' ? (sequence.match(/U/g) || []).length : 0,
+                G: (sequence.match(/G/g) || []).length,
+                C: (sequence.match(/C/g) || []).length
+            };
+
+            const gcCount = nucleotideCounts.G + nucleotideCounts.C;
+            const overallGCPercent = (gcCount / sequence.length) * 100;
+
+            results.overallStats = {
+                nucleotideCounts: nucleotideCounts,
+                gcContent: overallGCPercent,
+                atContent: sequenceType === 'DNA' ? ((nucleotideCounts.A + nucleotideCounts.T) / sequence.length) * 100 : 
+                          ((nucleotideCounts.A + nucleotideCounts.U) / sequence.length) * 100
+            };
+
+            // Sliding window analysis
+            for (let i = 0; i <= sequence.length - windowSize; i += stepSize) {
+                const window = sequence.substring(i, i + windowSize);
+                const windowGC = (window.match(/[GC]/g) || []).length;
+                const windowGCPercent = (windowGC / windowSize) * 100;
+
+                results.windows.push({
+                    position: i,
+                    sequence: window,
+                    gcContent: windowGCPercent,
+                    gcCount: windowGC
+                });
+            }
+
+            return results;
+        }
+
+        function displayResults(results, sequence, sequenceType) {
+            // Display statistics
+            const statsContainer = document.getElementById('stats');
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${results.length}</div>
+                    <div class="stat-label">Total Length</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${results.overallStats.gcContent.toFixed(1)}%</div>
+                    <div class="stat-label">Overall GC%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${results.overallStats.atContent.toFixed(1)}%</div>
+                    <div class="stat-label">${sequenceType === 'DNA' ? 'AT' : 'AU'}%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${results.windows.length}</div>
+                    <div class="stat-label">Windows Analyzed</div>
+                </div>
+            `;
+
+            // Update legend for RNA
+            if (sequenceType === 'RNA') {
+                document.getElementById('legend-t').textContent = 'U (Uracil)';
+            }
+
+            // Display sequence visualization
+            displaySequenceVisual(sequence);
+
+            // Display GC content chart
+            displayGCChart(results.windows);
+
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function displaySequenceVisual(sequence) {
+            const container = document.getElementById('sequenceVisual');
+            container.innerHTML = '';
+
+            sequence.split('').forEach((nucleotide, index) => {
+                const element = document.createElement('div');
+                element.className = `nucleotide ${nucleotide}`;
+                element.textContent = nucleotide;
+                element.title = `Position ${index + 1}: ${nucleotide}`;
+                container.appendChild(element);
+            });
+        }
+
+        function displayGCChart(windows) {
+            const container = document.getElementById('gcChart');
+            container.innerHTML = '';
+
+            const maxGC = Math.max(...windows.map(w => w.gcContent));
+            const minGC = Math.min(...windows.map(w => w.gcContent));
+            const range = maxGC - minGC || 1;
+
+            windows.forEach((window, index) => {
+                const bar = document.createElement('div');
+                bar.className = 'chart-bar';
+                const height = ((window.gcContent - minGC) / range) * 180 + 20;
+                bar.style.height = `${height}px`;
+                bar.style.left = `${(index / windows.length) * 100}%`;
+                bar.style.width = `${Math.max(100 / windows.length - 0.5, 1)}%`;
+                
+                bar.addEventListener('mouseenter', (e) => showTooltip(e, window));
+                bar.addEventListener('mouseleave', hideTooltip);
+                
+                container.appendChild(bar);
+            });
+        }
+
+        function showTooltip(event, window) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML = `
+                Position: ${window.position + 1}-${window.position + window.sequence.length}<br>
+                GC Content: ${window.gcContent.toFixed(1)}%<br>
+                Sequence: ${window.sequence}
+            `;
+            tooltip.style.opacity = '1';
+            tooltip.style.left = event.pageX + 10 + 'px';
+            tooltip.style.top = event.pageY - 10 + 'px';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.opacity = '0';
+        }
+
+        function exportResults(format) {
+            if (!analysisData.results) return;
+
+            const data = {
+                metadata: {
+                    sequenceLength: analysisData.sequence.length,
+                    windowSize: analysisData.windowSize,
+                    stepSize: analysisData.stepSize,
+                    sequenceType: analysisData.sequenceType,
+                    overallGCContent: analysisData.results.overallStats.gcContent,
+                    analysisDate: new Date().toISOString()
+                },
+                windows: analysisData.results.windows
+            };
+
+            if (format === 'csv') {
+                exportCSV(data);
+            } else if (format === 'json') {
+                exportJSON(data);
+            }
+        }
+
+        function exportCSV(data) {
+            let csv = 'Position,Window_Sequence,GC_Content,GC_Count\n';
+            data.windows.forEach(window => {
+                csv += `${window.position + 1},"${window.sequence}",${window.gcContent.toFixed(2)},${window.gcCount}\n`;
+            });
+
+            downloadFile(csv, 'gc_analysis.csv', 'text/csv');
+        }
+
+        function exportJSON(data) {
+            const json = JSON.stringify(data, null, 2);
+            downloadFile(json, 'gc_analysis.json', 'application/json');
+        }
+
+        function downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function showError(message) {
+            const existingError = document.querySelector('.error');
+            if (existingError) existingError.remove();
+
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+            
+            const toolSection = document.querySelector('.tool-section');
+            toolSection.insertBefore(errorDiv, toolSection.firstChild);
+
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+
+        // Add sample data functionality
+        function loadSampleData() {
+            const sampleSequence = `>Sample E. coli gene sequence
+ATGACCATGATTACGCCAAGCTTTGGAGCCTTTGTCCGACGAGCTGTAAGATGAGCGCAAC
+CAAGCTTTGGGAGCCTTTGTCCGACGAGCTGTAAGATGAGCGCAACCAAGCTTTGGAGCCTT
+TGTCCGACGAGCTGTAAGATGAGCGCAACCAAGCTTTGGAGCCTTTGTCCGACGAGCTGTAA
+GATGAGCGCAACCAAGCTTTGGAGCCTTTGTCCGACGAGCTGTAAGATGAGCGCAAC`;
+            
+            document.getElementById('sequence').value = sampleSequence;
+        }
+
+        // Add sample data button
+        document.addEventListener('DOMContentLoaded', function() {
+            const button = document.createElement('button');
+            button.textContent = '📋 Load Sample Data';
+            button.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 12px;
+            `;
+            button.onclick = loadSampleData;
+            document.querySelector('.tool-section').style.position = 'relative';
+            document.querySelector('.tool-section').appendChild(button);
+        });
+    </script>
+</body>
+</html>
